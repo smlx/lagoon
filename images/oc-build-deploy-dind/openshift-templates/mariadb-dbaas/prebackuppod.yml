@@ -66,6 +66,7 @@ objects:
       && mysqldump --max-allowed-packet=500M --events --routines --quick
       --add-locks --no-autocommit --single-transaction --no-create-db
       --ignore-table=$${SERVICE_NAME_UPPERCASE}_DATABASE.watchdog
+      --no-create-info
       -h $${SERVICE_NAME_UPPERCASE}_HOST
       -u $${SERVICE_NAME_UPPERCASE}_USERNAME
       -p$${SERVICE_NAME_UPPERCASE}_PASSWORD
