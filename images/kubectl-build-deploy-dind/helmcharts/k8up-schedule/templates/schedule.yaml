@@ -12,7 +12,11 @@ spec:
       key: repo-pw
       name: baas-repo-pw
     s3:
+    {{- if .Values.bucket }}
+      bucket: {{ .Values.bucket | quote }}
+    {{- else }}
       bucket: baas-{{ .Values.project }}-{{ randAlphaNum 4 }}
+    {{- end }}
   backup:
     schedule: '{{ .Values.backup.schedule }}'
   check:
