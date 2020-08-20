@@ -755,7 +755,7 @@ if [[ "${CAPABILITIES[@]}" =~ "backup.appuio.ch/v1alpha1/Schedule" ]]; then
   PRUNE_SCHEDULE=$( /kubectl-build-deploy/scripts/convert-crontab.sh "${NAMESPACE}" "M H(3-6) * * 6")
   TEMPLATE_PARAMETERS+=(-p PRUNE_SCHEDULE="${PRUNE_SCHEDULE}")
 
-  EXISTING_BUCKET=$(kubectl --insecure-skip-tls-verify -n "$NAMESPACE" get schedule k8up-lagoon-backup-schedule --output 'jsonpath={.spec.backend.s3.bucket}' 2> /dev/null)
+  EXISTING_BUCKET=$(kubectl --insecure-skip-tls-verify -n "$NAMESPACE" get schedule k8up-lagoon-backup-schedule --output 'jsonpath={.spec.backend.s3.bucket}' 2> /dev/null || true)
   helm template k8up-lagoon-backup-schedule /kubectl-build-deploy/helmcharts/k8up-schedule \
     -f /kubectl-build-deploy/values.yaml \
     --set bucket="$EXISTING_BUCKET" \
