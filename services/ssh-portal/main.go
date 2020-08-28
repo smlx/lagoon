@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"io"
+	"os"
 
 	"github.com/gliderlabs/ssh"
 	"github.com/google/uuid"
 	"github.com/smlx/lagoon/services/ssh-portal/internal/exec"
+	"github.com/smlx/lagoon/services/ssh-portal/internal/lagoon"
+	lclient "github.com/smlx/lagoon/services/ssh-portal/internal/lagoon/client"
+	"github.com/smlx/lagoon/services/ssh-portal/internal/lagoon/jwt"
 	"go.uber.org/zap"
 )
 
@@ -15,7 +21,6 @@ var (
 )
 
 func main() {
-
 	log, err := zap.NewProduction()
 	if err != nil {
 		panic(err)
@@ -25,50 +30,67 @@ func main() {
 	log.Info("startup",
 		zap.String("version", version), zap.String("buildTime", buildTime))
 
-	c, err := exec.New()
+	// get environmental configuration
+	lagoonAPI, keycloakBaseURL, jwtSecret, err := envConfig()
 	if err != nil {
-		log.Fatal("couldn't initialise exec", zap.Error(err))
-	}
-
-	l, err := lagoon.New()
-	if err != nil {
-		log.Fatal("couldn't initialise lagoon client", zap.Error(err))
+		log.Fatal("couldn't get environmental configuration", err)
 	}
 
 	k, err := keycloak.New()
 	if err != nil {
-		log.Fatal("couldn't initialise keycloak client", zap.Error(err))
+		log.Fatal("couldn't get keycloak client", zap.Error(err))
 	}
 
-	ssh.Handle(sessionHandler(c, l, k, log))
+	e, err := exec.New()
+	if err != nil {
+		log.Fatal("couldn't get exec client", zap.Error(err))
+	}
+
+	ssh.Handle(sessionHandler(k, e, lagoonAPI, jwtSecret, log))
 	log.Fatal("server error", zap.Error(ssh.ListenAndServe(":2222", nil)))
 }
 
-func sessionHandler(c *exec.Client, l *lagoon.Client, k *keycloak.Client, log *zap.Logger) ssh.Handler {
+func sessionHandler(k *keycloak.Client, c *exec.Client,
+	lagoonAPI, jwtSecret string, log *zap.Logger) ssh.Handler {
 	return func(s ssh.Session) {
+		// generate session ID
 		sid := uuid.New()
 		log.Info("start connection", zap.String("sessionID", sid.String()))
 		defer log.Info("end connection", zap.String("sessionID", sid.String()))
-		// get the user ID from lagoon
-		user, err := lagoon.UserBySSHKey(s.PublicKey)
+		// generate a JWT token
+		token, err := jwt.OneMinuteAdminToken(jwtSecret)
 		if err != nil {
-			log.Warn("couldn't get user from SSH key", zap.Error(err))
+			log.Error("couldn't get JWT token", zap.Error(err),
+				zap.String("sessionID", sid.String()))
+			io.WriteString(s, "internal error\n")
+			return
+		}
+		// get the lagoon client with the admin token
+		l := lclient.New(lagoonAPI, token, "ssh-portal "+version, true)
+		// get the user ID from lagoon
+		user, err := lagoon.UserBySSHKey(context.TODO(), l, s.PublicKey())
+		if err != nil {
+			log.Warn("couldn't get user from SSH key", zap.Error(err),
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "unknown user\n")
 			return
 		}
 		// get the user token from keycloak
-		token, err := keycloak.UserToken(user.ID)
+		ctoken, err := keycloak.UserToken(user.ID)
 		if err != nil {
 			log.Warn("couldn't get user token", zap.Error(err))
-			io.WriteString(s, "internal authentication error\n")
+			io.WriteString(s, "internal error\n")
 			return
 		}
-		// now, as the user, check for SSH permissions
-		// here, s.User() is the ssh username - for Lagoon this is the namespace name
-		canSSH, err := lagoon.UserCanSSHToEnvironment(s.User(), token)
+		// get the lagoon client using the user token
+		cl := lclient.New(lagoonAPI, ctoken, "ssh-portal "+version, true)
+		// Now, authenticated as the user, check for SSH permissions on the
+		// namespace. Here, s.User() is the ssh username - for Lagoon this is the
+		// namespace name
+		canSSH, err := lagoon.UserCanSSHToEnvironment(context.TODO(), cl, s.User())
 		if err != nil {
 			log.Warn("couldn't get user SSH permissions", zap.Error(err))
-			io.WriteString(s, "internal authentication error\n")
+			io.WriteString(s, "internal error\n")
 			return
 		}
 		if !canSSH {
@@ -76,8 +98,25 @@ func sessionHandler(c *exec.Client, l *lagoon.Client, k *keycloak.Client, log *z
 			return
 		}
 		if err := c.Exec("cli", s.User(), s.Command(), s, s.Stderr()); err != nil {
-			log.Warn("couldn't execute command", zap.Error(err), zap.String("sessionID", sid.String()))
+			log.Warn("couldn't execute command", zap.Error(err),
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "couldn't execute command\n")
 		}
 	}
+}
+
+func envConfig(log *zap.Logger) (string, string, string, error) {
+	lagoonAPI := os.Getenv("GRAPHQL_ENDPOINT")
+	if len(lagoonAPI) == 0 {
+		return "", "", "", fmt.Errorf("GRAPHQL_ENDPOINT not set")
+	}
+	keycloakBaseURL := os.Getenv("KEYCLOAK_BASEURL")
+	if len(keycloakBaseURL) == 0 {
+		return "", "", "", fmt.Errorf("KEYCLOAK_BASEURL not set")
+	}
+	jwtSecret := os.Getenv("JWTSECRET")
+	if len(jwtSecret) == 0 {
+		return "", "", "", fmt.Errorf("JWTSECRET not set")
+	}
+	return lagoonAPI, keycloakBaseURL, jwtSecret, nil
 }

@@ -20,7 +20,7 @@ type Client struct {
 	clientset *kubernetes.Clientset
 }
 
-// New creates a new kubernetes api client.
+// New creates a new kubernetes API client.
 func New() (*Client, error) {
 	// creates the in-cluster config
 	config, err := rest.InClusterConfig()
