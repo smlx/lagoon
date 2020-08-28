@@ -1,9 +1,13 @@
 package exec
 
 import (
+	"context"
+	"fmt"
 	"io"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/deprecated/scheme"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -36,7 +40,12 @@ func New() (*Client, error) {
 
 // Exec joins the given streams to the command or, if command is empty, to a
 // shell running in the given pod.
-func (c *Client) Exec(pod, namespace string, command []string, stdio io.ReadWriter, stderr io.Writer) error {
+func (c *Client) Exec(deployment, namespace string, command []string, stdio io.ReadWriter, stderr io.Writer) error {
+	// get the name of the first pod in the deployment
+	podName, err := c.podName(deployment, namespace)
+	if err != nil {
+		return err
+	}
 	// check the command.
 	// if there isn't one, the user wants an interactive terminal.
 	var tty bool
@@ -45,8 +54,8 @@ func (c *Client) Exec(pod, namespace string, command []string, stdio io.ReadWrit
 		tty = true
 	}
 	// construct the request
-	req := c.clientset.CoreV1().RESTClient().Post().Resource("pods").
-		Name(pod).Namespace(namespace).SubResource("exec")
+	req := c.clientset.CoreV1().RESTClient().Post().Namespace(namespace).
+		Resource("pods").Name(podName).SubResource("exec")
 	req.VersionedParams(
 		&v1.PodExecOptions{
 			Command: command,
@@ -68,4 +77,21 @@ func (c *Client) Exec(pod, namespace string, command []string, stdio io.ReadWrit
 		Stdout: stdio,
 		Stderr: stderr,
 	})
+}
+
+func (c *Client) podName(deployment, namespace string) (string, error) {
+	d, err := c.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), deployment,
+		metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	pods, err := c.clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labels.FormatLabels(d.Spec.Selector.MatchLabels),
+	})
+
+	if len(pods.Items) == 0 {
+		return "", fmt.Errorf("no pods for deployment: %s", deployment)
+	}
+
+	return pods.Items[0].Name, nil
 }
