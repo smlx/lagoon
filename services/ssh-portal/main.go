@@ -9,6 +9,7 @@ import (
 	"github.com/gliderlabs/ssh"
 	"github.com/google/uuid"
 	"github.com/smlx/lagoon/services/ssh-portal/internal/exec"
+	"github.com/smlx/lagoon/services/ssh-portal/internal/keycloak"
 	"github.com/smlx/lagoon/services/ssh-portal/internal/lagoon"
 	lclient "github.com/smlx/lagoon/services/ssh-portal/internal/lagoon/client"
 	"github.com/smlx/lagoon/services/ssh-portal/internal/lagoon/jwt"
@@ -19,6 +20,13 @@ var (
 	version   string
 	buildTime string
 )
+
+type envConfig struct {
+	jwtSecret                string
+	keycloakAuthServerSecret string
+	keycloakBaseURL          string
+	lagoonAPI                string
+}
 
 func main() {
 	log, err := zap.NewProduction()
@@ -31,12 +39,12 @@ func main() {
 		zap.String("version", version), zap.String("buildTime", buildTime))
 
 	// get environmental configuration
-	lagoonAPI, keycloakBaseURL, jwtSecret, err := envConfig()
+	config, err := getEnvConfig()
 	if err != nil {
-		log.Fatal("couldn't get environmental configuration", err)
+		log.Fatal("couldn't get environmental configuration", zap.Error(err))
 	}
 
-	k, err := keycloak.New()
+	k, err := keycloak.New(config.keycloakBaseURL, config.keycloakAuthServerSecret)
 	if err != nil {
 		log.Fatal("couldn't get keycloak client", zap.Error(err))
 	}
@@ -46,7 +54,7 @@ func main() {
 		log.Fatal("couldn't get exec client", zap.Error(err))
 	}
 
-	ssh.Handle(sessionHandler(k, e, lagoonAPI, jwtSecret, log))
+	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log))
 	log.Fatal("server error", zap.Error(ssh.ListenAndServe(":2222", nil)))
 }
 
@@ -76,7 +84,7 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 			return
 		}
 		// get the user token from keycloak
-		ctoken, err := keycloak.UserToken(user.ID)
+		ctoken, err := k.UserToken(user.ID)
 		if err != nil {
 			log.Warn("couldn't get user token", zap.Error(err))
 			io.WriteString(s, "internal error\n")
@@ -97,7 +105,11 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 			io.WriteString(s, "permission denied\n")
 			return
 		}
-		if err := c.Exec("cli", s.User(), s.Command(), s, s.Stderr()); err != nil {
+		// check if a pty is required
+		_, _, pty := s.Pty()
+		// start the command
+		err = c.Exec("cli", s.User(), s.Command(), s, s.Stderr(), pty)
+		if err != nil {
 			log.Warn("couldn't execute command", zap.Error(err),
 				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "couldn't execute command\n")
@@ -105,18 +117,24 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 	}
 }
 
-func envConfig(log *zap.Logger) (string, string, string, error) {
-	lagoonAPI := os.Getenv("GRAPHQL_ENDPOINT")
-	if len(lagoonAPI) == 0 {
-		return "", "", "", fmt.Errorf("GRAPHQL_ENDPOINT not set")
+func getEnvConfig() (*envConfig, error) {
+	config := envConfig{}
+	config.lagoonAPI = os.Getenv("GRAPHQL_ENDPOINT")
+	if len(config.lagoonAPI) == 0 {
+		return &config, fmt.Errorf("GRAPHQL_ENDPOINT not set")
 	}
-	keycloakBaseURL := os.Getenv("KEYCLOAK_BASEURL")
-	if len(keycloakBaseURL) == 0 {
-		return "", "", "", fmt.Errorf("KEYCLOAK_BASEURL not set")
+	config.keycloakBaseURL = os.Getenv("KEYCLOAK_BASEURL")
+	if len(config.keycloakBaseURL) == 0 {
+		return &config, fmt.Errorf("KEYCLOAK_BASEURL not set")
 	}
-	jwtSecret := os.Getenv("JWTSECRET")
-	if len(jwtSecret) == 0 {
-		return "", "", "", fmt.Errorf("JWTSECRET not set")
+	config.keycloakAuthServerSecret =
+		os.Getenv("KEYCLOAK_AUTH_SERVER_CLIENT_SECRET")
+	if len(config.keycloakAuthServerSecret) == 0 {
+		return &config, fmt.Errorf("KEYCLOAK_AUTH_SERVER_CLIENT_SECRET not set")
 	}
-	return lagoonAPI, keycloakBaseURL, jwtSecret, nil
+	config.jwtSecret = os.Getenv("JWTSECRET")
+	if len(config.jwtSecret) == 0 {
+		return &config, fmt.Errorf("JWTSECRET not set")
+	}
+	return &config, nil
 }

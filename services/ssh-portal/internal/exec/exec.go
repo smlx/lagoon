@@ -40,18 +40,16 @@ func New() (*Client, error) {
 
 // Exec joins the given streams to the command or, if command is empty, to a
 // shell running in the given pod.
-func (c *Client) Exec(deployment, namespace string, command []string, stdio io.ReadWriter, stderr io.Writer) error {
+func (c *Client) Exec(deployment, namespace string, command []string,
+	stdio io.ReadWriter, stderr io.Writer, tty bool) error {
 	// get the name of the first pod in the deployment
 	podName, err := c.podName(deployment, namespace)
 	if err != nil {
 		return err
 	}
-	// check the command.
-	// if there isn't one, the user wants an interactive terminal.
-	var tty bool
+	// check the command. if there isn't one, give the user a shell.
 	if len(command) == 0 {
 		command = []string{"sh"}
-		tty = true
 	}
 	// construct the request
 	req := c.clientset.CoreV1().RESTClient().Post().Namespace(namespace).
@@ -80,14 +78,15 @@ func (c *Client) Exec(deployment, namespace string, command []string, stdio io.R
 }
 
 func (c *Client) podName(deployment, namespace string) (string, error) {
-	d, err := c.clientset.AppsV1().Deployments(namespace).Get(context.TODO(), deployment,
-		metav1.GetOptions{})
+	d, err := c.clientset.AppsV1().Deployments(namespace).
+		Get(context.TODO(), deployment, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
-	pods, err := c.clientset.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{
-		LabelSelector: labels.FormatLabels(d.Spec.Selector.MatchLabels),
-	})
+	pods, err := c.clientset.CoreV1().Pods(namespace).
+		List(context.TODO(), metav1.ListOptions{
+			LabelSelector: labels.FormatLabels(d.Spec.Selector.MatchLabels),
+		})
 
 	if len(pods.Items) == 0 {
 		return "", fmt.Errorf("no pods for deployment: %s", deployment)
