@@ -105,11 +105,10 @@ func pubKeyAuth(log *zap.Logger, jwtSecret, lagoonAPI string, debug bool) ssh.Pu
 			base64.StdEncoding.EncodeToString(key.Marshal())))
 		user, err := lagoon.UserBySSHKey(context.TODO(), l, key)
 		if err != nil {
-			log.Debug("unknown SSH key", zap.Error(err), keyLogField)
+			log.Debug("unknown SSH key", keyLogField, zap.Error(err))
 			return false
 		}
-		log.Info("accepted public key", zap.String("userEmail", user.Email),
-			keyLogField)
+		log.Info("accepted public key", keyLogField, zap.String("userID", user.ID.String()))
 		ctx.SetValue(userKey, user)
 		return true
 	}
