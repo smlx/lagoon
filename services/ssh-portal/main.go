@@ -66,8 +66,14 @@ func main() {
 		log.Fatal("couldn't get exec client", zap.Error(err))
 	}
 
+	// configure ssh connection handling
 	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log, *debug))
-	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", *port), nil)))
+
+	pubKeyOption := ssh.PublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+		return true // allow all keys, or use ssh.KeysEqual() to compare against known keys
+	})
+
+	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", *port), nil, pubKeyOption)))
 }
 
 func sessionHandler(k *keycloak.Client, c *exec.Client,
