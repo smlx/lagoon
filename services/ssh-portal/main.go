@@ -100,14 +100,16 @@ func pubKeyAuth(log *zap.Logger, jwtSecret, lagoonAPI string, debug bool) ssh.Pu
 		// get the lagoon client with the admin token
 		l := lclient.New(lagoonAPI, token, "ssh-portal "+version, debug)
 		// get the user ID from lagoon
+		keyLogField := zap.String("publicKey", fmt.Sprintf("%s %s",
+			key.Type(),
+			base64.StdEncoding.EncodeToString(key.Marshal())))
 		user, err := lagoon.UserBySSHKey(context.TODO(), l, key)
 		if err != nil {
-			log.Warn("couldn't get user from SSH key", zap.Error(err))
+			log.Debug("unknown SSH key", zap.Error(err), keyLogField)
 			return false
 		}
-		log.Info("accepted public key", zap.String("publicKey", fmt.Sprintf("%s %s",
-			key.Type(),
-			base64.StdEncoding.EncodeToString(key.Marshal()))), zap.String("userEmail", user.Email))
+		log.Info("accepted public key", zap.String("userEmail", user.Email),
+			keyLogField)
 		ctx.SetValue(userKey, user)
 		return true
 	}
