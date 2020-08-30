@@ -56,7 +56,8 @@ func main() {
 		log.Fatal("couldn't get environmental configuration", zap.Error(err))
 	}
 
-	k, err := keycloak.New(config.keycloakBaseURL, config.keycloakAuthServerSecret)
+	k, err := keycloak.New(config.keycloakBaseURL,
+	config.keycloakAuthServerSecret, log)
 	if err != nil {
 		log.Fatal("couldn't get keycloak client", zap.Error(err))
 	}
@@ -70,6 +71,9 @@ func main() {
 	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log, *debug))
 
 	pubKeyOption := ssh.PublicKeyAuth(func(ctx ssh.Context, key ssh.PublicKey) bool {
+		if key.Type() == "ssh-rsa" {
+			return false
+		}
 		return true // allow all keys, or use ssh.KeysEqual() to compare against known keys
 	})
 

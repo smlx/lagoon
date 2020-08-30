@@ -10,16 +10,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // Client is a keycloak client.
 type Client struct {
 	baseURL          *url.URL
 	authServerSecret string
+	log              *zap.Logger
 }
 
 // New creates a new keycloak client.
-func New(baseURL, authServerSecret string) (*Client, error) {
+func New(baseURL, authServerSecret string, log *zap.Logger) (*Client, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, err
@@ -49,6 +51,7 @@ func (c *Client) UserToken(userID *uuid.UUID) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	c.log.Debug("keycloak request body", zap.ByteString("reqBytes", reqBytes))
 	reqData := bytes.NewBuffer(reqBytes)
 	hc := http.Client{
 		Timeout: 10 * time.Second,
