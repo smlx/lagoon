@@ -62,6 +62,7 @@ func (c *Client) UserToken(userID *uuid.UUID) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	c.log.Debug("keycloak response", zap.ByteString("response body", respBody))
 	// unmarshal to get the only field we care about from the response
 	kcResp := keycloakResponse{}
 	return kcResp.AccessToken, json.Unmarshal(respBody, &kcResp)
