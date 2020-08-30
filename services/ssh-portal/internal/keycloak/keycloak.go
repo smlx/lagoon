@@ -1,6 +1,7 @@
 package keycloak
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"net/url"
@@ -31,6 +32,11 @@ func New(baseURL, authServerSecret string, log *zap.Logger) (*Client, error) {
 	}, nil
 }
 
+// keycloakResponse is the user impersonation response from keycloak
+type keycloakResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
 // UserToken returns a JWT token for the given userID.
 func (c *Client) UserToken(userID *uuid.UUID) (string, error) {
 	hc := http.Client{
@@ -53,5 +59,10 @@ func (c *Client) UserToken(userID *uuid.UUID) (string, error) {
 	}
 	defer resp.Body.Close()
 	respBody, err := ioutil.ReadAll(resp.Body)
-	return string(respBody), err
+	if err != nil {
+		return "", err
+	}
+	// unmarshal to get the only field we care about from the response
+	kcResp := keycloakResponse{}
+	return kcResp.AccessToken, json.Unmarshal(respBody, &kcResp)
 }
