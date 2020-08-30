@@ -29,6 +29,7 @@ func New(baseURL, authServerSecret string, log *zap.Logger) (*Client, error) {
 	return &Client{
 		baseURL:          u,
 		authServerSecret: authServerSecret,
+		log:              log,
 	}, nil
 }
 
