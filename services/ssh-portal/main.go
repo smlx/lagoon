@@ -66,12 +66,12 @@ func main() {
 		log.Fatal("couldn't get exec client", zap.Error(err))
 	}
 
-	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log))
+	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log, *debug))
 	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", *port), nil)))
 }
 
 func sessionHandler(k *keycloak.Client, c *exec.Client,
-	lagoonAPI, jwtSecret string, log *zap.Logger) ssh.Handler {
+	lagoonAPI, jwtSecret string, log *zap.Logger, debug bool) ssh.Handler {
 	return func(s ssh.Session) {
 		// generate session ID
 		sid := uuid.New()
@@ -86,7 +86,7 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 			return
 		}
 		// get the lagoon client with the admin token
-		l := lclient.New(lagoonAPI, token, "ssh-portal "+version, true)
+		l := lclient.New(lagoonAPI, token, "ssh-portal "+version, debug)
 		// get the user ID from lagoon
 		user, err := lagoon.UserBySSHKey(context.TODO(), l, s.PublicKey())
 		if err != nil {

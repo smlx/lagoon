@@ -21,6 +21,7 @@ func UserBySSHKey(ctx context.Context, c SSH, key gossh.PublicKey) (*schema.User
 	user := schema.User{}
 	spew.Dump(key)
 	spew.Dump(user)
+	spew.Dump(c)
 	return &user, c.UserBySSHKey(ctx, string(key.Marshal()), &user)
 }
 
