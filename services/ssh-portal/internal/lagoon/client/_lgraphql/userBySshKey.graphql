@@ -3,5 +3,6 @@ query ($sshKey: String!)
   userBySshKey(sshKey: $sshKey)
   {
     id
+    email
   }
 }

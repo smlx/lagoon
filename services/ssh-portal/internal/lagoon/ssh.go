@@ -5,6 +5,7 @@ package lagoon
 import (
 	"context"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/smlx/lagoon/services/ssh-portal/internal/schema"
 	gossh "golang.org/x/crypto/ssh"
 )
@@ -18,6 +19,8 @@ type SSH interface {
 // UserBySSHKey returns the user associated with the given SSH key.
 func UserBySSHKey(ctx context.Context, c SSH, key gossh.PublicKey) (*schema.User, error) {
 	user := schema.User{}
+	spew.Dump(key)
+	spew.Dump(user)
 	return &user, c.UserBySSHKey(ctx, string(key.Marshal()), &user)
 }
 

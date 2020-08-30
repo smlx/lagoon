@@ -8,4 +8,5 @@ docker: build
 
 .PHONY: build
 build:
+	go generate ./...
 	CGO_ENABLED=0 go build -ldflags "-X main.version=$$(git describe --always) -X main.buildTime=$$(date -u +"%Y-%m-%dT%H:%M:%SZ")" .
