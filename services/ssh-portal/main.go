@@ -125,14 +125,30 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 		// authentication
 		user, ok := s.Context().Value(userKey).(*schema.User)
 		if !ok {
-			log.Error("unknown context value for user")
+			log.Error("unknown context value for user",
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "internal error\n")
+			return
 		}
+		log.Info("identified user",
+			zap.String("userID", user.ID.String()),
+			zap.String("userEmail", user.Email),
+			zap.String("sessionID", sid.String()))
 		// get a user token from keycloak
 		ctoken, err := k.UserToken(&user.ID)
 		if err != nil {
-			log.Warn("couldn't get user token", zap.Error(err))
+			log.Warn("couldn't get user token", zap.Error(err),
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "internal error\n")
+			return
+		}
+		// check the user and command. if it is "lagoon" and "token" respectively,
+		// return the user token and exit. This is used to get a graphql token via
+		// SSH.
+		cmd := s.Command()
+		if s.User() == "lagoon" && len(cmd) == 1 && cmd[0] == "token" {
+			log.Info("issuing user token", zap.String("sessionID", sid.String()))
+			io.WriteString(s, ctoken)
 			return
 		}
 		// get the lagoon client using the user token
@@ -142,11 +158,14 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 		// namespace name
 		canSSH, err := lagoon.UserCanSSHToEnvironment(context.TODO(), cl, s.User())
 		if err != nil {
-			log.Warn("couldn't get user SSH permissions", zap.Error(err))
+			log.Warn("couldn't get user SSH permissions", zap.Error(err),
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "internal error\n")
 			return
 		}
 		if !canSSH {
+			log.Info("permission denied", zap.Error(err),
+				zap.String("sessionID", sid.String()))
 			io.WriteString(s, "permission denied\n")
 			return
 		}
