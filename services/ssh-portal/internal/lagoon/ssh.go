@@ -21,7 +21,7 @@ type SSH interface {
 func UserBySSHKey(ctx context.Context, c SSH, key gossh.PublicKey) (*schema.User, error) {
 	user := schema.User{}
 	return &user, c.UserBySSHKey(ctx,
-		fmt.Sprintf("%s %s\n",
+		fmt.Sprintf("%s %s",
 			key.Type(),
 			base64.StdEncoding.EncodeToString(key.Marshal())),
 		&user)
