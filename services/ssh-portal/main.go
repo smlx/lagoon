@@ -30,10 +30,13 @@ type envConfig struct {
 }
 
 func main() {
+	// parse flags
+	debug := flag.Bool("debug", false, "enable debug logging")
+	port := flag.Int("port", 2222, "listen port")
+	flag.Parse()
 	// init logger
 	var log *zap.Logger
 	var err error
-	debug := flag.Bool("debug", false, "enable debug logging")
 	if *debug {
 		log, err = zap.NewDevelopment()
 	} else {
@@ -64,8 +67,7 @@ func main() {
 	}
 
 	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log))
-	port := flag.Int("port", 2222, "listen port")
-	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", port), nil)))
+	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", *port), nil)))
 }
 
 func sessionHandler(k *keycloak.Client, c *exec.Client,
