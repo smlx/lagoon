@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -29,7 +30,15 @@ type envConfig struct {
 }
 
 func main() {
-	log, err := zap.NewProduction()
+	// init logger
+	var log *zap.Logger
+	var err error
+	debug := flag.Bool("debug", false, "enable debug logging")
+	if *debug {
+		log, err = zap.NewDevelopment()
+	} else {
+		log, err = zap.NewProduction()
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -55,7 +64,7 @@ func main() {
 	}
 
 	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log))
-	log.Fatal("server error", zap.Error(ssh.ListenAndServe(":2222", nil)))
+	log.Fatal("server error", zap.Error(ssh.ListenAndServe(":2020", nil)))
 }
 
 func sessionHandler(k *keycloak.Client, c *exec.Client,
@@ -63,8 +72,8 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 	return func(s ssh.Session) {
 		// generate session ID
 		sid := uuid.New()
-		log.Info("start connection", zap.String("sessionID", sid.String()))
-		defer log.Info("end connection", zap.String("sessionID", sid.String()))
+		log.Info("start session", zap.String("sessionID", sid.String()))
+		defer log.Info("end session", zap.String("sessionID", sid.String()))
 		// generate a JWT token
 		token, err := jwt.OneMinuteAdminToken(jwtSecret)
 		if err != nil {
