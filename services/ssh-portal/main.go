@@ -64,7 +64,8 @@ func main() {
 	}
 
 	ssh.Handle(sessionHandler(k, e, config.lagoonAPI, config.jwtSecret, log))
-	log.Fatal("server error", zap.Error(ssh.ListenAndServe(":2020", nil)))
+	port := flag.Int("port", 2222, "listen port")
+	log.Fatal("server error", zap.Error(ssh.ListenAndServe(fmt.Sprintf(":%d", port), nil)))
 }
 
 func sessionHandler(k *keycloak.Client, c *exec.Client,
