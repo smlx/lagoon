@@ -18,8 +18,9 @@ func OneMinuteAdminToken(secret string) (string, error) {
 	claims := LagoonClaims{
 		Role: "admin",
 		StandardClaims: jwt.StandardClaims{
-			IssuedAt:  now.Unix(),
+			Audience:  "api.dev",
 			ExpiresAt: now.Unix() + 60,
+			IssuedAt:  now.Unix(),
 			Subject:   "ssh-portal",
 		},
 	}
