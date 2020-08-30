@@ -96,7 +96,7 @@ func sessionHandler(k *keycloak.Client, c *exec.Client,
 			return
 		}
 		// get the user token from keycloak
-		ctoken, err := k.UserToken(user.ID)
+		ctoken, err := k.UserToken(&user.ID)
 		if err != nil {
 			log.Warn("couldn't get user token", zap.Error(err))
 			io.WriteString(s, "internal error\n")
